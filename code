@@ -1,0 +1,319 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Diagnostics;
+
+class WordCount
+{
+    public string word;
+    public int count;
+}
+
+class MostRepeatingWords //My modified HighScoreTable class
+{
+    private WordCount[] table;
+    private int length;
+    private int countMRW = 0;
+    //length stores desired number of top scores to store
+    //default length is 20
+    public MostRepeatingWords()
+    {
+        length = 20;
+        table = new WordCount[length];
+    }
+    private int FindPosition(int numRepeated)
+    {
+        if (countMRW == 0)
+        {
+            return 0;
+        }
+        for (int i = 0; i < countMRW; ++i)
+        {
+            if (numRepeated > table[i].count)
+            {
+                return i;
+            }
+        }
+        if (countMRW < length)
+        {
+            return countMRW;
+        }
+        return -1;
+        //returns -1 if score is not high enough to be in table 
+        //ie high score is less than N top scores
+    }
+
+    public void Add(WordCount word)
+    {
+        //1. Get the proper index of where the score should be added
+        int position = FindPosition(word.count);
+        if (position > -1)
+        //if FindPosition returns -1 the score should not be added to the table
+        //ie only if position is greater than -1 should it be added
+        {
+            //2. Shift all entries lower than position down one
+            //create a temporary array that is the same as the table
+            //to make shifting possible
+            WordCount[] temp = new WordCount[length];
+            for (int i = 0; i < countMRW; ++i)
+            {
+                temp[i] = table[i];
+            }
+            //if count equals length, the loop must repeat until i=count-1
+            //to avoid an IndexOutOfRangeException, however is count does
+            //not equal length, the loop can repeat until i=count 
+            if (countMRW == length)
+            {
+                for (int i = position; i < countMRW - 1; ++i)
+                {
+                    table[i + 1] = temp[i];
+                }
+            }
+            else
+            {
+                for (int i = position; i < countMRW; ++i)
+                {
+                    table[i + 1] = temp[i];
+                }
+            }
+            //3.Store the score in the table at table[position]
+            table[position] = word;
+            if (countMRW < length)
+            {
+                countMRW = countMRW + 1;
+            }
+        }
+    }
+
+    //Lists high scores
+    public void List()
+    {
+        for (int i = 0; i < table.Length; ++i)
+        {
+            //repeat until there is a null entry in the table
+            //or all values have been outputted
+            if (table[i] != null)
+            {
+                Console.WriteLine((i + 1) + " " + table[i].word + " " + table[i].count);
+            }
+            else if (table[i] == null)
+            {
+                break;
+            }
+        }
+    }
+}
+
+class Program
+{
+    static void Main()
+    {
+        Process instance = Process.GetCurrentProcess();
+        IntPtr value = new IntPtr(1);
+        instance.ProcessorAffinity = value;
+        
+        try
+        {
+            // TODO: Copy and paste your directory here.  Your directory should ONLY contain the books!
+            string directoryContainingBooks = @"C:\Users\Matt\Documents\p2-books\p2-books";
+
+            DirectoryInfo dirInfo = new DirectoryInfo(directoryContainingBooks);
+            if (!dirInfo.Exists)
+            {
+                throw new Exception("Directory " + directoryContainingBooks + " does not exist.");
+            }
+
+            // We are going to read all of the words in and store them in a list
+            // to make the rest of your project easier for you.  This is NOT the
+            // way one would normally operate.  There is no reason to store 
+            // all of the data in RAM.  We only need to read words from the file,
+            // count them, and then move on to the rest of the file.
+            List<string> words = new List<string>();
+            words.Capacity = 4500000; // pre-allocate needed space
+            foreach (FileInfo fileInfo in dirInfo.GetFiles("*.txt"))
+            {
+                StreamReader sr = new StreamReader(fileInfo.FullName);
+                Tokenize(sr.ReadToEnd(), words);
+                sr.Close();
+            }
+
+            Console.WriteLine("Finished reading {0} words.", words.Count);
+
+            
+            //UNSORTED LIST
+            
+            List<WordCount> list=new List<WordCount>();
+            MostRepeatingWords topWords = new MostRepeatingWords();
+            Stopwatch unsortedTime = new Stopwatch();
+            unsortedTime.Start();
+            for(int i=0;i<words.Count;++i)
+            {
+                string currWord = words[i];
+                bool foundYet = false;
+                for(int j=0;j<list.Count;++j)
+                {
+                    if (currWord.Equals(list[j].word, StringComparison.Ordinal))
+                    {
+                        list[j].count += 1;
+                        foundYet = true;
+                        break;
+                    }
+                }
+                if(!foundYet)
+                {
+                    WordCount wordToAdd = new WordCount();
+                    wordToAdd.word = currWord;
+                    wordToAdd.count = 1;
+                    list.Add(wordToAdd);
+                }
+            }
+            unsortedTime.Stop();
+            Console.WriteLine("To count the words with an unsorted list took " 
+                + (unsortedTime.ElapsedMilliseconds)/1000.0 + " seconds.");
+            Console.WriteLine("Found " + list.Count + " unique words.");
+            Console.WriteLine("The 20 most frequent words and their counts are:");
+            for(int i=0;i<list.Count;++i)
+            {
+                topWords.Add(list[i]);
+            }
+            topWords.List();
+            Console.WriteLine();
+            
+            
+            //SORTED LIST
+            SortedList<string, int> list2 = new SortedList<string, int>(StringComparer.Ordinal);
+            Stopwatch sortedTime = new Stopwatch();
+            sortedTime.Start();
+            for(int i=0;i<words.Count;++i)
+            {
+                string currWord=words[i];
+                if(!list2.ContainsKey(currWord))
+                {
+                    list2.Add(currWord,1);
+                }
+                else
+                {
+                    list2[currWord] += 1;
+                }
+            }
+            sortedTime.Stop();
+            Console.WriteLine("To count the words with a sorted list took " 
+                + (sortedTime.ElapsedMilliseconds) / 1000.0 + " seconds.");
+            Console.WriteLine("Found " + list2.Count + " unique words.");
+            Console.WriteLine("The 20 most frequent words and their counts are:");
+            MostRepeatingWords topWordsSorted = new MostRepeatingWords();
+            foreach(KeyValuePair<string,int> wordAndCount in list2)
+            {
+                WordCount pair = new WordCount();
+                pair.word = wordAndCount.Key;
+                pair.count = wordAndCount.Value;
+                topWordsSorted.Add(pair);
+            }
+            topWordsSorted.List();
+            Console.WriteLine();
+            
+        
+            //BINARY SEARCH TREE
+            SortedDictionary<string, int> list3 = new SortedDictionary<string, int>(StringComparer.Ordinal);
+            Stopwatch BSTTime = new Stopwatch();
+            BSTTime.Start();
+            for(int i=0;i<words.Count;++i)
+            {
+                string currWord = words[i];
+                if(!list3.ContainsKey(currWord))
+                {
+                    list3.Add(currWord, 1);
+                }
+                else
+                {
+                    list3[currWord] += 1;
+                }
+            }
+            BSTTime.Stop();
+            Console.WriteLine("To count the words with a Binary Search Tree took " 
+                + (BSTTime.ElapsedMilliseconds) / 1000.0 + " seconds.");
+            Console.WriteLine("Found " + list3.Count + " unique words.");
+            Console.WriteLine("The 20 most frequent words and their counts are:");
+            MostRepeatingWords topWordsBST = new MostRepeatingWords();
+            foreach (KeyValuePair<string, int> wordAndCount in list3)
+            {
+                WordCount pair = new WordCount();
+                pair.word = wordAndCount.Key;
+                pair.count = wordAndCount.Value;
+                topWordsBST.Add(pair);
+            }
+            topWordsBST.List();
+            Console.WriteLine();
+            
+            
+            //HASH TABLE 
+            Dictionary<string, int> list4 = new Dictionary<string, int>(StringComparer.Ordinal);
+            Stopwatch HTTime = new Stopwatch();
+            HTTime.Start();
+            for(int i=0;i<words.Count;++i)
+            {
+                string currWord = words[i];
+                if(!list4.ContainsKey(currWord))
+                {
+                    list4.Add(currWord, 1);
+                }
+                else
+                {
+                    list4[currWord] += 1;
+                }
+            }
+            HTTime.Stop();
+            Console.WriteLine("To count the words with a Hash Table took " 
+                + (HTTime.ElapsedMilliseconds)/1000.0 + " seconds.");
+            Console.WriteLine("Found " + list4.Count + " unique words.");
+            Console.WriteLine("The 20 most frequent words and their counts are:");
+            MostRepeatingWords topWordsHT = new MostRepeatingWords();
+            foreach (KeyValuePair<string, int> wordAndCount in list4)
+            {
+                WordCount pair = new WordCount();
+                pair.word = wordAndCount.Key;
+                pair.count = wordAndCount.Value;
+                topWordsHT.Add(pair);
+            }
+            topWordsHT.List();
+            Console.WriteLine();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine("Caught unhandled exception: " + ex);
+        }
+    }
+
+    // This function takes a string and breaks it up into "words" and 
+    // adds them to the given list.
+    //
+    // Based on SimpleTokenizer by Trevor Strohman, 
+    // http://www.galagosearch.org/
+    static public void Tokenize(string text, List<string> words)
+    {
+        text = text.ToLower();
+
+        int start = 0;
+
+        int i;
+        for (i = 0; i < text.Length; ++i)
+        {
+            char c = text[i];
+            if (!char.IsLetter(c))
+            {
+                if (start != i)
+                {
+                    string token = text.Substring(start, i - start);
+                    words.Add(token);
+                }
+                start = i + 1;
+            }
+        }
+
+        if (start != i)
+        {
+            words.Add(text.Substring(start, i - start));
+        }
+    }
+
+}
